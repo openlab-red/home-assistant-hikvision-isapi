@@ -1,6 +1,8 @@
+from http import HTTPStatus
 import logging
+from typing import Any
 
-from homeassistant.components.lock import LockEntity
+from homeassistant.components.lock import LockEntity, LockEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.exceptions import ConfigEntryError
 from homeassistant.helpers.entity import DeviceInfo
@@ -11,6 +13,7 @@ from homeassistant.helpers.update_coordinator import (
 
 from . import HikvisionData
 from hikvision_isapi_cli.errors import UnexpectedStatus
+from hikvision_isapi_cli.types import Response
 from hikvision_isapi_cli.api.isapi import door
 from hikvision_isapi_cli.models import (
     RootTypeForXMLRemoteControlDoor,
@@ -51,25 +54,36 @@ class HikvisionLock(HikvisionCoordinatorEntity, LockEntity):
         """Initialize Hikvision door channel."""
         HikvisionCoordinatorEntity.__init__(self, hikvision_data, config_entry)
         LockEntity.__init__(self)
+        self._attr_supported_features = LockEntityFeature(1)
+        self._attr_is_locked = True
         self._lock = lock
         self._latch = latch
-        self._is_locked = True
 
-    def lock(self, **kwargs):
-        _LOGGER.warning("Locking not implemented")
+    async def async_open(self, **kwargs: Any) -> None:
+        self.unlock(**kwargs)
 
-    def unlock(self, **kwargs):
-        _LOGGER.warning("Unlocking not implemented")
+    async def _lock_delay(self, _now):
+        self._attr_is_locking = True
+        self.async_write_ha_state()
+        await self.async_lock()
 
-    def open(self, **kwargs):
-        raise NotImplementedError()
-
-    async def async_lock(self, **kwargs):
-        self._is_locked = True
+    async def _locked(self, _now, **kwargs):
+        """Set Lock Entity status to locked."""
+        self._attr_is_locking = False
+        self._attr_is_locked = True
         self.async_write_ha_state()
 
-    async def async_unlock(self, **kwargs):
+    async def async_lock(self, **kwargs: Any) -> None:
+        if self._latch > 0:
+            if self._attr_is_locked:
+                await self.async_unlock(**kwargs)
+            else:
+                async_call_later(self.hass, delay=self._latch, action=self._locked)
+
+    async def async_unlock(self, **kwargs: Any) -> None:
         try:
+            self._attr_is_unlocking = True
+            self.async_write_ha_state()
             request = RootTypeForXMLRemoteControlDoor()
             request.remote_control_door = (
                 RootTypeForXMLRemoteControlDoorRemoteControlDoor()
@@ -78,23 +92,26 @@ class HikvisionLock(HikvisionCoordinatorEntity, LockEntity):
             request.remote_control_door.version = "2.0"
             request.remote_control_door.xmlns = "http://www.isapi.org/ver20/XMLSchema"
 
-            await door.asyncio(
+            response: Response = await door.asyncio_detailed(
                 door_id=self._lock, client=self._host.api, json_body=request
             )
 
-            async def _lock_later(_now):
-                await self.async_lock()
+            if response.status_code == HTTPStatus.OK:
+                self._attr_is_unlocking = False
+                self._attr_is_locked = False
+                self.async_write_ha_state()
+                if self._latch > 0:
+                    async_call_later(
+                        self.hass, delay=self._latch, action=self._lock_delay
+                    )
+            else:
+                self._attr_is_locked = True
+                _LOGGER.error(response.content)
 
-            self._is_locked = False
-            async_call_later(self.hass, delay=self._latch, action=_lock_later)
-            self.async_write_ha_state()
         except (UnexpectedStatus, Exception) as err:
             raise ConfigEntryError(
                 f'Error while trying to unlock door: {self._lock} host: {self._host.api.base_url}: "{str(err)}".'
             ) from err
-
-    async def async_open(self, **kwargs):
-        return await self.async_unlock()
 
     @property
     def name(self):
@@ -118,11 +135,13 @@ class HikvisionLock(HikvisionCoordinatorEntity, LockEntity):
         """Return the device info object."""
 
         return DeviceInfo(
+            configuration_url=self._host.api.base_url,
             identifiers={self.unique_id},
             connections=self._host.device_info["connections"],
             name=self.name,
             manufacturer=MANUFACTURER,
             model=self._host.device_info["model"],
+            hw_version=self._host.device_info["hw_version"],
             sw_version=self._host.device_info["sw_version"],
             via_device=(DOMAIN, self._host.unique_id),
         )

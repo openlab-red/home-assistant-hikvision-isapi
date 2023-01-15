@@ -1,4 +1,3 @@
-import dataclasses
 import logging
 import async_timeout
 from datetime import timedelta
@@ -13,12 +12,10 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from hikvision_isapi_cli.errors import UnexpectedStatus
 
-from .const import DOMAIN, MANUFACTURER, PLATFORMS
+from .const import DOMAIN, MANUFACTURER, PLATFORMS, CONF_KEEPALIVE
 from .host import HikvisionHost
 
 PLATFORMS = [Platform.LOCK, Platform.CAMERA, Platform.SENSOR]
-DEVICE_UPDATE_INTERVAL = 30
-
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -59,13 +56,14 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         _LOGGER,
         name=f"{MANUFACTURER}.{host.device_info['name']}",
         update_method=async_device_config_update,
-        update_interval=timedelta(seconds=DEVICE_UPDATE_INTERVAL),
+        update_interval=timedelta(seconds=config_entry.data[CONF_KEEPALIVE]),
     )
     # Fetch initial data so we have data when entities subscribe
     await coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})[config_entry.entry_id] = HikvisionData(
-        host=host, device_coordinator=coordinator,
+        host=host,
+        device_coordinator=coordinator,
     )
 
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)

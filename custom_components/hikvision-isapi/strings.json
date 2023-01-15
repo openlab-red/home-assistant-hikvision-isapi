@@ -7,7 +7,9 @@
           "port": "[%key:common::config_flow::data::port%]",
           "verify_ssl": "[%key:common::config_flow::data::verify_ssl%]",
           "username": "[%key:common::config_flow::data::username%]",
-          "password": "[%key:common::config_flow::data::password%]"
+          "password": "[%key:common::config_flow::data::password%]",
+          "latch": "[%key:common::config_flow::data::latch%]",
+          "keepalive": "[%key:common::config_flow::data::keepalive%]"
         }
       }
     },
