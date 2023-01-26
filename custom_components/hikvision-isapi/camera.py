@@ -73,13 +73,15 @@ class HikvisionCamera(HikvisionCoordinatorEntity, Camera):
 
     async def stream_source(self) -> str | None:
         """Return the source of the stream."""
-        return self._rtsp.stream_url()
+        return self._rtsp.stream_source()
 
     # async def async_camera_image(
     #     self, width: int | None = None, height: int | None = None
     # ) -> bytes | None:
     #     """Return a still image response from the camera."""
     #     return await self._rtsp.get_snapshot()
+    async def async_camera_image(self, width: int | None = None, height: int | None = None) -> bytes | None:
+        return None
 
     @property
     def device_info(self) -> DeviceInfo:
