@@ -1,4 +1,4 @@
 pytest
 pytest-cov
 pytest-homeassistant-custom-component
-hikvision-isapi-cli>=1.0.20
+hikvision-isapi-cli==1.0.23
