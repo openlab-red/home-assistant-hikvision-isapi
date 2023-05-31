@@ -68,7 +68,7 @@ class HikvisionCamera(HikvisionCoordinatorEntity, Camera):
         self._rtsp = RtspClient(
             client=self._host.api,
             rtsp_port=554,
-            path=f"ISAPI/streaming/channels/{self._stream.video.video_input_channel_id}",
+            path=f"ISAPI/streaming/channels/{self._stream.id}",
         )
 
     async def stream_source(self) -> str | None:
@@ -80,7 +80,9 @@ class HikvisionCamera(HikvisionCoordinatorEntity, Camera):
     # ) -> bytes | None:
     #     """Return a still image response from the camera."""
     #     return await self._rtsp.get_snapshot()
-    async def async_camera_image(self, width: int | None = None, height: int | None = None) -> bytes | None:
+    async def async_camera_image(
+        self, width: int | None = None, height: int | None = None
+    ) -> bytes | None:
         return self._rtsp.get_snapshot(self._stream.id)
 
     @property
